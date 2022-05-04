@@ -1,0 +1,589 @@
+---
+title: "Google Analytics Capstone: Case Study 1" 
+author: "Alecsander Guimarães"
+date: '2022-04-29'
+output: html_document
+---
+
+# Introduction
+
+This is a case study for a fictional company, Cyclist, a bike-sharing company. The main objective is to perform many real-world tasks of a junior data analyst. The data source can be found in <https://divvy-tripdata.s3.amazonaws.com/index.html>.
+
+# Scenario
+
+"You are a junior data analyst working in the marketing analyst team at Cyclistic, a bike-share company in Chicago. The director of marketing believes the company's future success depends on maximizing the number of annual memberships. Therefore, your team wants to understand how casual riders and annual members use Cyclistic bikes differently. From these insights, your team will design a new marketing strategy to convert casual riders into annual members. But first, Cyclistic executives must approve your recommendations, so they must be backed up with compelling data insights and professional data visualizations."
+
+# 1. Ask
+
+## Business Task
+
+The junior data analyst have to answer the following question: How do annual members and casual riders use Cyclistic bikes differently?
+
+## Objective
+
+Design a new marketing strategy to convert casual riders into annual members.
+
+# 2. Prepare
+
+## Data Source
+
+The data used has been made available by Motivate International Inc. under this [license](https://www.divvybikes.com/data-license-agreement) and the can be accessed through this [link](https://divvy-tripdata.s3.amazonaws.com/index.html).
+
+## Data Organisation
+
+For this case study, the last twelves months of data (April 2021 - March 2022) were used. Their are stored in csv files with thirteen columns.
+
+## Credibility of the Data
+
+The data is collected directly by the company and includes all the rides recorded. The data is also current and it is published each month.
+
+## Licensing, privacy, security, and accessibility
+
+All the personal information was removed from the data, which is also a limitation, because it does not allow to identify recurrent users or if they are from Chicago. The data license can be accessed in <https://ride.divvybikes.com/data-license-agreement>.
+
+## Data information
+
+The data contains information about the user type, initial and final station, as well as start and end time. This allows to identify the differences between the casual and the annual member.
+
+## Problems with the dataset
+
+The data contains missing fields and some inconsistencies. These errors are mainly in the fields associated with stations and duration times, and can be solved through by data cleansing.
+
+# 3. Process
+
+## The tool
+
+R was the selected tool because it works well with a large volume of data, and contains excellent options for cleaning, processing and visualizing the data.
+
+## Data Integrity
+
+The data was previously combined in one dataframe, with 5,723,532 rows and 13 columns. Due to hardware limitations, a sample, with 600000 rows, has been extracted and it is with this sample that the study will be carried out. As mentioned before, there are some errors in the dataset:
+
+-   Missing values in the start and end station variables
+-   Missing values in the end_lat and end_lng
+-   Negative trip times
+
+## Loading the libraries
+
+```{r library}
+library(janitor)
+library(tidyverse)
+library(skimr)
+library(lubridate)
+library(scales)
+```
+
+## Loading the data
+
+```{r data}
+df <- read_csv('~/Cursos/Data Google/Capstone/Data/CSV/sample_dataset.csv')
+df$...1 <- NULL
+colnames(df)
+```
+
+## Checking the data
+
+### Information about the data
+
+```{r glimpse}
+glimpse(df)
+```
+
+### Looking for null variables
+
+```{r null}
+colSums(is.na(df))
+```
+
+### Checking duplicated data
+
+```{r duplicated}
+sum(duplicated(df))
+```
+
+## Data cleaning
+
+### Creating new columns and filtering
+
+During the analysis the trip duration by hour, day and month will be evaluated. Therefore it is necessary to create new columns that provide this data. In addition, trips with negative time will be discarded. The empty station fields will be removed in a next step, because they have no influence at first.
+
+```{r columns}
+df_1 <- df %>%
+  mutate(
+    day_week = wday(started_at, label = TRUE, abbr = FALSE),
+    month = month(started_at, label = TRUE, abbr = FALSE),
+    hour = as.factor(hour(started_at)),
+    rideable_type = as.factor(rideable_type),
+    member_casual = as.factor(member_casual),
+    trip_time = difftime(ended_at, started_at, units = 'mins')
+  ) %>%
+  filter(trip_time > 0)
+```
+
+### Removing empty stations
+
+```{r data station}
+df_station_cleaned <- df_1 %>%
+  drop_na(c('start_station_name', 'end_station_name')) 
+colSums(is.na(df_station_cleaned))
+```
+
+As shown, the data contains null variables. I chose to divide into two dataframes, one with all the data, except the trips that are negative, and another without the null stations.
+
+# 4. Analyze
+
+## Statistical evaluation
+
+For the initial analysis, we want to know the basics about the data, for that we are going to use the function `skim_without_charts`.
+
+```{r skim}
+skim_without_charts(df_1)
+```
+
+```{r mean trip time}
+mean(df_1$trip_time)
+```
+
+
+It shows us that:
+
+-   Busiest days are:
+    -   Sat: 103072
+    -   Sun: 91073
+    -   Fri: 85902
+-   Busiest months are:
+    -   Jul: 86105
+    -   Aug: 83945
+    -   Sep: 79267
+-   Busiest hours are:
+    -   17: 59956
+    -   18: 51673
+    -   16: 49743
+-   User type:
+    -   Member: 333128
+    -   Casual: 266810
+-   Bike type:
+    -   Classic: 340812
+    -   Eletric: 227424
+    -   Docked: 31702
+-   The mean of trip_time is 21.4 minutes;
+-   The max of trip_time is 47776 minutes.
+
+## Summarizing the data
+
+The data will be aggregated and saved to facilitate further analysis and also in the creation of graphs.
+They will be divided into csv files, having a summary of the data as follows:
+* By user
+* By hour
+* By day
+* By month
+* By station
+* By bike
+
+All data summaries will have the total trips, the average trip time, and the sum of all trip times. The only exception is the summary data for stations, which contains only the number of trips.
+
+### By user
+
+```{r summary users}
+summary_users <- df_1 %>%
+  group_by(member_casual) %>%
+  summarise(
+    total_trips_users = n(),
+    mean_trip_time_users = mean(trip_time),
+    sum_trip_time_users = sum(trip_time),
+    .groups = 'drop'
+  )
+summary_users
+write_csv(summary_users, 'summary_users.csv')
+```
+
+### By hour
+
+```{r summary hour}
+summary_hour <- df_1 %>%
+  group_by(hour, member_casual) %>%
+  summarise(
+    total_trips_hour = n(),
+    mean_trip_time_hour = mean(trip_time),
+    sum_trip_time_hour = sum(trip_time),
+    .groups = 'drop'
+  )
+summary_hour
+write_csv(summary_hour, 'summary_day.csv')
+```
+
+### By day
+
+```{r summary day}
+summary_day <- df_1 %>%
+  group_by(day_week, member_casual) %>%
+  summarise(
+    total_trips_day = n(),
+    mean_trip_time_day = mean(trip_time),
+    sum_trip_time_day = sum(trip_time),
+    .groups = 'drop'
+  )
+summary_day
+write_csv(summary_day, 'summary_week.csv')
+```
+
+### By month
+
+```{r summary month}
+summary_month <- df_1 %>%
+  group_by(month, member_casual) %>%
+  summarise(
+    total_trips_month = n(),
+    mean_trip_time_month = mean(trip_time),
+    sum_trip_time_month = sum(trip_time),
+    .groups = 'drop'
+  )
+summary_month
+write_csv(summary_month, 'summary_month.csv')
+```
+
+### By station
+
+```{r summary start station}
+summary_start_station <- df_station_cleaned %>%
+  group_by(start_station_name, member_casual) %>%
+  summarise(
+    total_trips_start_station = n()
+  ) %>%
+  arrange(-total_trips_start_station)
+summary_start_station
+write.csv(summary_start_station, 'summary_start_station.csv')
+```
+
+```{r summary end station}
+summary_end_station <- df_station_cleaned %>%
+  group_by(end_station_name, member_casual) %>%
+  summarise(
+    total_trips_end_station = n()
+    ) %>%
+  arrange(-total_trips_end_station)
+summary_end_station
+write_csv(summary_end_station, 'summary_end_station.csv')
+```
+
+### By bike
+
+```{r summary bike day}
+summary_bike <- df_1 %>% 
+  group_by(rideable_type, member_casual, day_week) %>%
+  summarise(
+    total_trips_rideable_type = n(),
+    mean_trip_time_rideable_type = mean(trip_time),
+    sum_trip_time_rideable_type = sum(trip_time)
+  )
+summary_bike
+write.csv(summary_bike, 'summary_bike.csv')
+```
+
+
+
+## Visualizing the data
+
+The graphs will be made from the summarized data and divided in the same way.
+
+### By user
+
+#### Total Trips by User
+```{r total trips by user}
+summary_users %>%
+  ggplot(aes(member_casual, total_trips_users, fill = member_casual))+
+  geom_col()+
+  labs(
+    title = 'Total Trips by User',
+    x = 'user',
+    y = 'total trips'
+  )+
+  scale_y_continuous(labels = comma)
+```
+
+#### Average Time Trip by User
+```{r mean trip_time by user}
+summary_users %>%
+  ggplot(aes(member_casual, mean_trip_time_users, fill = member_casual))+
+  geom_col()+
+  labs(
+    title = 'Average Trip Time by User',
+    x = 'user',
+    y = 'average trip time in minutes'
+  )
+```
+
+
+#### Total Trip Time by User
+```{r sum trip time by user}
+summary_users %>%
+  ggplot(aes(member_casual, sum_trip_time_users, fill = member_casual))+
+  geom_col()+
+  labs(
+    title = 'Sum of Trip Time by User',
+    x = 'user',
+    y = 'sum trip time'
+  )+
+  scale_y_continuous(labels = comma)
+```
+
+### By hour
+
+#### Total Trips by Hour
+```{r total trips by hour}
+summary_hour %>%
+  ggplot(aes(hour, total_trips_hour, group = member_casual))+
+  geom_line(aes(color=member_casual))+
+  geom_point(aes(color = member_casual), size = 2)+
+  labs(
+    title = 'Total Trips by Hour',
+    y = 'number of trips'
+  )
+```
+
+
+#### Average Trip Time by Hour
+```{r mean trip time by hour}
+summary_hour %>%
+  ggplot(aes(hour, mean_trip_time_hour, group = member_casual))+
+  geom_line(aes(color=member_casual))+
+  geom_point(aes(color = member_casual), size = 2)+
+  labs(
+    title = 'Average Trip Time by Hour',
+    y = 'average trip time in minutes'
+  )
+```
+
+#### Total Trip Time by Hour
+```{r sum trip time by hour}
+summary_hour %>%
+  ggplot(aes(hour, sum_trip_time_hour, group = member_casual))+
+  geom_line(aes(color=member_casual))+
+  geom_point(aes(color = member_casual), size = 2)+
+  labs(
+    title = 'Sum of Trip Time by Hour',
+    y = 'sum of trip time in minutes'
+  )
+  
+```
+
+### By day
+
+#### Total Trips by Day
+```{r total trips by day}
+summary_day %>%
+  ggplot(aes(day_week, total_trips_day, group = member_casual))+
+  geom_line(aes(color=member_casual))+
+  geom_point(aes(color = member_casual), size = 2)+
+  expand_limits(y = 0)+
+  scale_x_discrete(
+    labels = c(
+      'domingo' = 'Sun', 'segunda-feira' = 'Mon', 'terça-feira' = 'Tue',
+      'quarta-feira' = 'Wed', 'quinta-feira' = 'Thu', 'sexta-feira' = 'Fri',
+      'sábado' = 'Sat'
+    ))+
+  labs(
+    title = 'Total Trips by Day',
+    x = 'day of the week',
+    y = 'number of trips'
+  )
+```
+
+#### Average Trip Time by Day
+```{r mean trip time by day}
+summary_day %>%
+  ggplot(aes(day_week, mean_trip_time_day, group = member_casual))+
+  geom_line(aes(color=member_casual))+
+  geom_point(aes(color = member_casual), size = 2)+
+  scale_x_discrete(
+    labels = c(
+      'domingo' = 'Sun', 'segunda-feira' = 'Mon', 'terça-feira' = 'Tue',
+      'quarta-feira' = 'Wed', 'quinta-feira' = 'Thu', 'sexta-feira' = 'Fri',
+      'sábado' = 'Sat'
+    ))+
+  labs(
+    title = 'Average Trip Time by Day',
+    x = 'day of the week',
+    y = 'average trip time in minutes'
+  )
+```
+
+#### Total Trip Time by Day
+```{r sum trip time by day}
+summary_day %>%
+  ggplot(aes(day_week, sum_trip_time_day, group = member_casual))+
+  geom_line(aes(color=member_casual))+
+  geom_point(aes(color = member_casual), size = 2)+
+  scale_x_discrete(
+    labels = c(
+      'domingo' = 'Sun', 'segunda-feira' = 'Mon', 'terça-feira' = 'Tue',
+      'quarta-feira' = 'Wed', 'quinta-feira' = 'Thu', 'sexta-feira' = 'Fri',
+      'sábado' = 'Sat'
+    ))+
+  labs(
+    title = 'Sum of Trip Time by Day',
+    x = 'day',
+    y = 'sum of trip time in minutes'
+  )
+```
+
+### By month
+
+#### Total Trips by Month
+```{r total trips by month}
+summary_month %>%
+  ggplot(aes(month, total_trips_month, group = member_casual))+
+  geom_line(aes(color=member_casual))+
+  geom_point(aes(color = member_casual), size = 2)+
+  expand_limits(y = 0)+
+  scale_x_discrete(
+    labels = c(
+      'janeiro' = 'jan', 'fevereiro' = 'feb', 'março' = 'mar',
+      'abril' = 'apr', 'maio' = 'may', 'junho' = 'jun',
+      'julho' = 'jul', 'agosto' = 'aug', 'setembro' = 'sep',
+      'outubro' = 'oct', 'novembro' = 'nov', 'dezembro' = 'dec'
+    ))+
+  labs(
+    title = 'Total Trips by Month',
+    x = 'month',
+    y = 'number of trips'
+  )
+```
+
+#### Average Trip Time by Month
+```{r mean trip time by month}
+summary_month %>%
+  ggplot(aes(month, mean_trip_time_month, group = member_casual))+
+  geom_line(aes(color=member_casual))+
+  geom_point(aes(color = member_casual), size = 2)+
+  scale_x_discrete(
+    labels = c(
+      'janeiro' = 'jan', 'fevereiro' = 'feb', 'março' = 'mar',
+      'abril' = 'apr', 'maio' = 'may', 'junho' = 'jun',
+      'julho' = 'jul', 'agosto' = 'aug', 'setembro' = 'sep',
+      'outubro' = 'oct', 'novembro' = 'nov', 'dezembro' = 'dec'
+    ))+
+  labs(
+    title = 'Average Trip Time by Month',
+    x = 'month',
+    y = 'average trip time in minutes'
+  )
+```
+
+#### Total Trip Time by Month
+```{r sum trip time by month}
+summary_month %>%
+  ggplot(aes(month, sum_trip_time_month, group = member_casual))+
+  geom_line(aes(color=member_casual))+
+  geom_point(aes(color = member_casual), size = 2)+
+  scale_x_discrete(
+    labels = c(
+      'janeiro' = 'jan', 'fevereiro' = 'feb', 'março' = 'mar',
+      'abril' = 'apr', 'maio' = 'may', 'junho' = 'jun',
+      'julho' = 'jul', 'agosto' = 'aug', 'setembro' = 'sep',
+      'outubro' = 'oct', 'novembro' = 'nov', 'dezembro' = 'dec'
+    ))+
+  labs(
+    title = 'Sum of Trip Time by Month',
+    x = 'month',
+    y = 'sum of trip time in minutes'
+  )
+```
+
+### By station
+
+#### Most Popular Initial Stations
+
+```{r start station}
+summary_start_station[1:10, ] %>% 
+  ggplot(aes(start_station_name, total_trips_start_station, fill = member_casual))+
+  geom_col(position = 'dodge')+
+  coord_flip()+
+  labs(
+    title = 'Most Popular Initial Stations',
+    x = 'station name',
+    y = 'number of trips'
+  )
+```
+
+#### Most Popular Final Stations
+
+```{r end station}
+summary_end_station[1:10, ] %>% 
+  ggplot(aes(end_station_name, total_trips_end_station, fill = member_casual))+
+  geom_col(position = 'dodge')+
+  coord_flip()+
+  labs(
+    title = 'Most Popular Final Stations',
+    x = 'station name',
+    y = 'number of trips'
+  )
+```
+
+### By bike
+
+#### Total Trips by Bike
+```{r total trips by bike}
+summary_bike %>%
+  ggplot(aes(member_casual, total_trips_rideable_type, fill = member_casual))+
+  geom_col(position = 'dodge')+
+  facet_wrap(~rideable_type)+
+  labs(
+    title = 'Total Trips by User',
+    x = 'user',
+    y = 'total trips'
+  )+
+  scale_y_continuous(labels = comma)
+```
+
+#### Average Time Trip by Bike
+```{r average time bike}
+summary_bike %>%
+  ggplot(aes(member_casual, mean_trip_time_rideable_type, fill = member_casual))+
+  geom_col(position = 'dodge')+
+  facet_wrap(~rideable_type)+
+  labs(
+    title = 'Average Time Trips by User',
+    x = 'user',
+    y = 'average trip time in minutes'
+  )
+```
+
+#### Total Trips by Bike
+```{r Total Trips month by User/Bike}
+summary_bike %>% 
+  ggplot(aes(day_week, total_trips_rideable_type, fill = member_casual))+
+  geom_col(position = 'dodge')+
+  facet_grid(~member_casual~rideable_type)+
+  scale_x_discrete(
+    labels = c(
+      'domingo' = 'S', 'segunda-feira' = 'M', 'terça-feira' = 'T',
+      'quarta-feira' = 'W', 'quinta-feira' = 'T', 'sexta-feira' = 'F',
+      'sábado' = 'S'
+    ))+
+  labs(
+    title = 'Total Trips by User and Type',
+    x = 'Day',
+    y = 'Total Trips'
+    )
+```
+
+
+# 5. Share
+The analysis can be acessed through this [link](https://github.com/alecsandergr/capstone-case-study-1)
+ 
+# 6. Act
+
+## Limitations
+
+The main limitation of the data is the impossibility of observing individual user behavior and even knowing whether the user is from the city or not.
+
+## Recomendations
+
+1. The marketing team should create a focused campaign for the busiest periods. This corresponds to weekends and Friday for weekdays, the months of July to September, and the late afternoon and early evening hours, from 3 pm to 6 pm
+2. The most visited stations could also be the focus of a campaign
+3. Another behavior that could be observed by the marketing team is the longer average travel time of casual users
+4. Focusing on the type of bicycle, one opportunity is the combination of the classic type of bicycle and weekend trips that have a high volume
+
+
+
